@@ -190,3 +190,7 @@ cython_debug/
 
 # Project specific files
 /enterprise-context/sic-agent/sic-scrapper/output/*
+
+# IDEA project additions
+*.bak
+unstructured2graph/rollback/
