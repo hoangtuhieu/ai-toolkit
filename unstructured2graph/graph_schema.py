@@ -260,67 +260,63 @@ def resolve_obsidian_links(driver, verbose: bool = True) -> dict:
         "placeholders_created": 0,
     }
 
-    with driver.session() as session:
-        # Fetch all ingested Document nodes with content
-        docs = session.run(
-            "MATCH (d:Document {status: 'ingested'}) "
-            "RETURN d.filename_stem AS stem, d.content AS content"
-        ).data()
+    # Fetch all ingested Document nodes with content
+    docs = driver.query(
+        "MATCH (d:Document {status: 'ingested'}) "
+        "RETURN d.filename_stem AS stem, d.content AS content"
+    )
 
-        summary["total_documents"] = len(docs)
-        if verbose:
-            print(f"[resolve_obsidian_links] Scanning {len(docs)} ingested Document nodes...")
+    summary["total_documents"] = len(docs)
+    if verbose:
+        print(f"[resolve_obsidian_links] Scanning {len(docs)} ingested Document nodes...")
 
-        for doc in docs:
-            source_stem = doc["stem"]
-            content     = doc.get("content") or ""
+    for doc in docs:
+        source_stem = doc["stem"]
+        doc_content = doc.get("content") or ""
 
-            links = extract_obsidian_links(content)
-            summary["total_links_found"] += len(links)
+        links = extract_obsidian_links(doc_content)
+        summary["total_links_found"] += len(links)
 
-            for link in links:
-                target_stem  = link["target_stem"]
-                link_text    = link["link_text"]
-                link_format  = link["link_format"]
+        for link in links:
+            target_stem  = link["target_stem"]
+            link_text    = link["link_text"]
+            link_format  = link["link_format"]
 
-                # Ensure target Document node exists (real or placeholder)
-                result = session.run(
-                    "MATCH (d:Document {filename_stem: $stem}) RETURN d.status AS status",
-                    stem=target_stem
-                ).single()
+            # Check if target Document node exists
+            result = driver.query(
+                "MATCH (d:Document {filename_stem: $stem}) RETURN d.status AS status",
+                {"stem": target_stem}
+            )
 
-                if result is None:
-                    # Create placeholder
-                    now = int(time.time())
-                    session.run(
-                        """
-                        MERGE (d:Document {filename_stem: $stem})
-                        ON CREATE SET
-                            d.status     = 'placeholder',
-                            d.resolved   = false,
-                            d.created_at = $now,
-                            d.modified_at = $now
-                        """,
-                        stem=target_stem,
-                        now=now,
-                    )
-                    summary["placeholders_created"] += 1
-                    if verbose:
-                        print(f"  [placeholder] {target_stem}")
-
-                # Create or update LINKS_TO edge (MERGE = idempotent)
-                session.run(
+            if not result:
+                # Create placeholder
+                now = int(time.time())
+                driver.query(
                     """
-                    MATCH (src:Document {filename_stem: $src_stem})
-                    MATCH (tgt:Document {filename_stem: $tgt_stem})
-                    MERGE (src)-[r:LINKS_TO {link_text: $link_text, link_format: $link_format}]->(tgt)
+                    MERGE (d:Document {filename_stem: $stem})
+                    ON CREATE SET
+                        d.status      = 'placeholder',
+                        d.resolved    = false,
+                        d.created_at  = $now,
+                        d.modified_at = $now
                     """,
-                    src_stem=source_stem,
-                    tgt_stem=target_stem,
-                    link_text=link_text,
-                    link_format=link_format,
+                    {"stem": target_stem, "now": now}
                 )
-                summary["edges_created"] += 1
+                summary["placeholders_created"] += 1
+                if verbose:
+                    print(f"  [placeholder] {target_stem}")
+
+            # Create LINKS_TO edge (MERGE = idempotent)
+            driver.query(
+                """
+                MATCH (src:Document {filename_stem: $src_stem})
+                MATCH (tgt:Document {filename_stem: $tgt_stem})
+                MERGE (src)-[r:LINKS_TO {link_text: $link_text, link_format: $link_format}]->(tgt)
+                """,
+                {"src_stem": source_stem, "tgt_stem": target_stem,
+                 "link_text": link_text, "link_format": link_format}
+            )
+            summary["edges_created"] += 1
 
     if verbose:
         print(f"[resolve_obsidian_links] Done.")
