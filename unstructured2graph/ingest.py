@@ -65,6 +65,11 @@ from lightrag.llm.openai import openai_complete_if_cache
 from lightrag_memgraph import MemgraphLightRAGWrapper
 from memgraph_toolbox.api.memgraph import Memgraph
 from unstructured2graph import create_index, from_unstructured
+from graph_schema import (
+    ENTITY_TYPES, SCHEMA_VERSION,
+    extract_file_metadata, build_document_node_props, build_chunk_extra_props,
+)
+
 
 load_dotenv()
 
@@ -422,15 +427,81 @@ async def ingest_batch(sources: list[str], skip_lightrag: bool = False, auto_rol
     await lightrag_wrapper.initialize(
         working_dir=LIGHTRAG_DIR,
         llm_model_func=litellm_complete,
-        llm_model_name=LIGHTRAG_MODEL)
+        llm_model_name=LIGHTRAG_MODEL,
+        addon_params={"entity_type_prompt_file": "idea-infra.yml"})
 
     success = False
     try:
         for source in sources:
             logger.info(f"Processing: {source}")
-            await from_unstructured([source], memgraph, lightrag_wrapper,
-                                    only_chunks=skip_lightrag, link_chunks=True)
+
+            # ── Pre-ingestion: extract filename metadata ───────────────────────
+            file_metadata = extract_file_metadata(source)
+            if file_metadata:
+                logger.info(
+                    f"File metadata: timestamp={file_metadata['note_timestamp']} "
+                    f"role={file_metadata['note_role']}"
+                )
+
+            # ── Read full file content for :Document node ─────────────────────
+            try:
+                file_content = Path(source).read_text(encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Could not read file content for Document node: {e}")
+                file_content = ""
+
+            # ── LightRAG ingestion with entity type vocabulary ────────────────
+            await from_unstructured(
+                [source], memgraph, lightrag_wrapper,
+                only_chunks=skip_lightrag, link_chunks=True,
+            )
             logger.info(f"Chunked: {source}")
+
+            # ── Write :Document node ──────────────────────────────────────────
+            doc_props = build_document_node_props(source, file_content, file_metadata)
+            doc_stem  = doc_props["filename_stem"]
+            now_ts    = doc_props["modified_at"]
+
+            # MERGE so re-ingestion updates an existing or placeholder node
+            memgraph.query(
+                """
+                MERGE (d:Document {filename_stem: $stem})
+                SET d += $props
+                """,
+                {"stem": doc_stem, "props": doc_props},
+            )
+            logger.info(f"Document node written: {doc_stem}")
+
+            # ── Inject note_timestamp / note_role into Chunk nodes ────────────
+            # Chunk nodes have no source_id or file_path property — match all
+            # Chunk nodes that do not yet have note_timestamp set. Safe because
+            # ingestion is single-threaded and locked (one file at a time).
+            chunk_extra = build_chunk_extra_props(file_metadata)
+            if chunk_extra:
+                memgraph.query(
+                    """
+                    MATCH (c:Chunk)
+                    WHERE c.note_timestamp IS NULL
+                    SET c += $extra
+                    """,
+                    {"extra": chunk_extra},
+                )
+                logger.info(
+                    f"Chunk metadata injected: timestamp={chunk_extra.get('note_timestamp')}"
+                )
+
+            # ── Write PART_OF edges: Chunk -> Document ────────────────────────
+            # Match Chunk nodes that belong to this Document via text content
+            # heuristic: Chunk nodes without an existing PART_OF edge.
+            memgraph.query(
+                """
+                MATCH (c:Chunk), (d:Document {filename_stem: $stem})
+                WHERE NOT (c)-[:PART_OF]->()
+                MERGE (c)-[:PART_OF]->(d)
+                """,
+                {"stem": doc_stem},
+            )
+            logger.info(f"PART_OF edges written: Chunk -> Document({doc_stem})")
 
         await lightrag_wrapper.afinalize()
         logger.info("Entity extraction complete.")

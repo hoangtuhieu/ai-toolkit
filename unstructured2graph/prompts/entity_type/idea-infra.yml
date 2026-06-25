@@ -1,0 +1,42 @@
+entity_types_guidance: |
+  Use ONLY the following entity types. If an entity does not fit any specific
+  type, use "other".
+
+  - machine    : A physical or virtual computer, server, or host (e.g. Mac Mini,
+                 ai-main, Proxmox VM, docker-services). Use for named computing
+                 hardware or OS-level hosts.
+  - service    : A running software service, daemon, or container (e.g. LiteLLM,
+                 Memgraph, Hermes, Ollama, llama-server, Docker container). Use
+                 for things that listen on a port or run as a background process.
+  - tool       : A command-line utility, script, or developer tool used directly
+                 by a person (e.g. uv, git, Claude Code, mgconsole, ssh). Not
+                 a running service — something you invoke.
+  - config     : A configuration file, environment file, or settings object
+                 (e.g. .env, config.yaml, docker-compose.yml, schema_config.json).
+  - network    : A network address, port, protocol, interface, or connectivity
+                 concept (e.g. 192.168.10.101, port 4000, Tailscale, 10GbE).
+  - concept    : An architectural idea, design pattern, convention, or abstract
+                 principle (e.g. two-remote git workflow, rollback mechanism,
+                 vocabulary injection, Schema Version).
+  - person     : A human individual referenced by name or role.
+  - data       : A dataset, file collection, knowledge base, or structured data
+                 store (e.g. Obsidian vault, model weights, embedding index,
+                 graph database contents).
+  - artifact   : A specific file, document, script, or produced output that is
+                 not a config file (e.g. ingest.py, PIPELINE.md, rollback JSONL,
+                 handoff document).
+  - other      : Anything that does not fit the above types.
+
+entity_extraction_examples:
+  - |
+    entity{tuple_delimiter}Mac Mini{tuple_delimiter}machine{tuple_delimiter}The Mac Mini M4 Pro with 48GB unified memory is the always-on primary local development hub running macOS Sequoia.
+    entity{tuple_delimiter}LiteLLM{tuple_delimiter}service{tuple_delimiter}LiteLLM is a proxy service running on docker-services port 4000 that routes LLM requests to local inference backends.
+    entity{tuple_delimiter}uv{tuple_delimiter}tool{tuple_delimiter}uv is the sole Python package and virtual environment manager used across all IDEA machines.
+    entity{tuple_delimiter}schema_config.json{tuple_delimiter}config{tuple_delimiter}schema_config.json is the single source of truth for entity vocabulary and relationship types in the unstructured2graph pipeline.
+    entity{tuple_delimiter}192.168.10.101{tuple_delimiter}network{tuple_delimiter}The static IP address assigned to docker-services on the home 10GbE network.
+    entity{tuple_delimiter}two-remote git workflow{tuple_delimiter}concept{tuple_delimiter}A convention where every repository has exactly two remotes: origin pointing to GitHub and unraid pointing to the Unraid NAS bare repo.
+    entity{tuple_delimiter}ingest.py{tuple_delimiter}artifact{tuple_delimiter}ingest.py is the main ingestion pipeline script that processes documents into the memgraph-u2g knowledge graph.
+    entity{tuple_delimiter}Obsidian vault{tuple_delimiter}data{tuple_delimiter}The Obsidian vault is a collection of approximately 10000 markdown notes that serves as the primary document source for the knowledge graph.
+    relation{tuple_delimiter}LiteLLM{tuple_delimiter}Mac Mini{tuple_delimiter}runs on, hosts{tuple_delimiter}LiteLLM service runs as a Docker container on docker-services which is hosted by the Proxmox hypervisor on the PC tower.
+    relation{tuple_delimiter}ingest.py{tuple_delimiter}schema_config.json{tuple_delimiter}reads, depends on{tuple_delimiter}ingest.py reads schema_config.json at startup to load entity type vocabulary and relationship types for LightRAG.
+    {completion_delimiter}

@@ -194,3 +194,4 @@ cython_debug/
 # IDEA project additions
 *.bak
 unstructured2graph/rollback/
+.DS_Store

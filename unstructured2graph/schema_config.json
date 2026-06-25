@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "entity_types": [
+    "machine",
+    "service",
+    "tool",
+    "config",
+    "network",
+    "concept",
+    "person",
+    "data",
+    "artifact",
+    "other"
+  ],
+  "relationship_types": [
+    "RUNS_ON",
+    "CONNECTS_TO",
+    "DEPENDS_ON",
+    "MANAGES",
+    "STORES",
+    "PART_OF",
+    "MENTIONED_IN",
+    "NEXT",
+    "LINKS_TO"
+  ],
+  "property_hints": {
+    "entity_id": "Canonical name of the entity. Use for identity queries and exact matches.",
+    "entity_type": "Classification of the entity. Allowed values: machine, service, tool, config, network, concept, person, data, artifact, other.",
+    "description": "Human-readable summary of the entity. Use for descriptive queries.",
+    "note_timestamp": "Authorship timestamp in format YYMMDD-hhmm. Use for display only.",
+    "note_timestamp_epoch": "Unix epoch integer of authorship time. Use for time-based comparisons and sorting.",
+    "note_role": "Author of the source note. Values: hieu, claude.ai.",
+    "text": "Raw chunk text. Present on :Chunk nodes only. Use for content searches.",
+    "filename_stem": "Filename without .md extension. Present on :Document nodes. Use for link resolution queries.",
+    "status": "Document node status. Values: ingested, placeholder. Use to find unresolved links.",
+    "content": "Full file content. Present on :Document nodes with status ingested only."
+  },
+  "note_roles": {
+    "0": "hieu",
+    "1": "claude.ai"
+  }
+}
